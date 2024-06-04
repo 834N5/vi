@@ -12,7 +12,7 @@ int vi_open(const char *f, struct fb *fb)
 	if ((fp = fopen(f, "r")) == NULL)
 		return 1;
 	do {
-		if (len = fread(b, sizeof(b[0]), BUF_SIZE, fp)) {
+		if ((len = fread(b, sizeof(b[0]), BUF_SIZE, fp))) {
 			fb->len += len;
 			fb->b = realloc(fb->b, sizeof(*fb->b) * (fb->len + 1));
 			memcpy(fb->b + fb->len - len, b, len);
