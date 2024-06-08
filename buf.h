@@ -6,8 +6,11 @@
 struct fb {
 	char *b;
 	size_t len;
+	size_t lines;
 };
 
 int vi_open(const char *f, struct fb *fb);
+
+char *vi_getline(struct fb *fb, size_t n);
 
 #endif
