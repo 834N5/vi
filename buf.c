@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,13 +15,15 @@ int vi_open(const char *f, struct fb *fb)
 	do {
 		if ((len = fread(b, sizeof(b[0]), BUF_SIZE, fp))) {
 			fb->len += len;
-			fb->b = realloc(fb->b, sizeof(*fb->b) * (fb->len + 1));
+			fb->b = realloc(fb->b, sizeof(*fb->b) * (fb->len));
 			memcpy(fb->b + fb->len - len, b, len);
-			fb->b[fb->len] = '\0';
 		}
 	} while(len == BUF_SIZE);
 	fclose(fp);
+	fb->b = realloc(fb->b, sizeof(*fb->b) * (fb->len + 1));
+	fb->b[fb->len] = '\0';
 
+	/* Append line break unless file is empty */
 	if (fb->len && fb->b[fb->len - 1] != '\n') {
 		fb->b[fb->len++] = '\n';
 		fb->b = realloc(fb->b, sizeof(*fb->b) * (fb->len + 1));
