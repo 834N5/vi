@@ -11,6 +11,6 @@ struct fb {
 
 int vi_open(const char *f, struct fb *fb);
 
-char *vi_getline(struct fb *fb, size_t n);
+char *vi_getline(const struct fb *fb, size_t n);
 
 #endif
