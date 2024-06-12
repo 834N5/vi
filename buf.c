@@ -5,7 +5,7 @@
 #include "buf.h"
 
 /* copy file to buffer and append line break if needed */
-int vi_open(const char *f, struct fb *fb)
+int vi_open(const char *f, struct buf *fb)
 {
 	FILE *fp;
 	char b[BUF_SIZE];
@@ -36,7 +36,7 @@ int vi_open(const char *f, struct fb *fb)
 }
 
 /* get pointer to first char of line n */
-char *vi_getline(const struct fb *fb, size_t n) {
+char *vi_getline(const struct buf *fb, size_t n) {
 	char *b = fb->b;
 	for (size_t i = 1; i < n && i < fb->lines; ++i)
 		b = strchr(b, '\n') + 1;
