@@ -3,36 +3,49 @@
 #include <stdlib.h>
 #include <string.h>
 #include "buf.h"
+#include "vi.h"
 
 /* copy file to buffer and append line break if needed */
-int vi_open(const char *f, struct buf *fb)
+void vi_open(const char *f, struct buf *fb)
 {
 	FILE *fp;
 	char b[BUF_SIZE];
+	char *p;
 	size_t len = 0;
 
-	if ((fp = fopen(f, "r")) == NULL)
-		return 1;
+	fp = fopen(f, "r+");
+	if (!fp)
+		die("Error opening file");
 	do {
 		if ((len = fread(b, sizeof(b[0]), BUF_SIZE, fp))) {
+			p = realloc(fb->b, sizeof(*fb->b) * (fb->len + len));
+			if (!p) {
+				fclose(fp);
+				die("realloc failed");
+			}
+			fb->b = p;
+			memcpy(fb->b + fb->len, b, len);
 			fb->len += len;
-			fb->b = realloc(fb->b, sizeof(*fb->b) * (fb->len));
-			memcpy(fb->b + fb->len - len, b, len);
 		}
 	} while(len == BUF_SIZE);
 	fclose(fp);
-	fb->b = realloc(fb->b, sizeof(*fb->b) * (fb->len + 1));
+	p = realloc(fb->b, sizeof(*fb->b) * (fb->len + 1));
+	if (!p)
+		die("realloc failed");
+	fb->b = p;
 	fb->b[fb->len] = '\0';
 
 	/* Append line break unless file is empty */
 	if (fb->len && fb->b[fb->len - 1] != '\n') {
+		p = realloc(fb->b, sizeof(*fb->b) * (fb->len + 2));
+		if (!p)
+			die("realloc failed");
+		fb->b = p;
 		fb->b[fb->len++] = '\n';
-		fb->b = realloc(fb->b, sizeof(*fb->b) * (fb->len + 1));
 		fb->b[fb->len] = '\0';
 	}
 
 	for (char *c = fb->b; (c = strchr(c, '\n')) != NULL; ++fb->lines, ++c);
-	return 0;
 }
 
 /* get pointer to first char of line n */

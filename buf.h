@@ -32,7 +32,7 @@ struct piece_table {
 	size_t *undo_stack;
 };
 
-int vi_open(const char *f, struct buf *fb);
+void vi_open(const char *f, struct buf *fb);
 
 char *vi_getline(const struct buf *fb, size_t n);
 
