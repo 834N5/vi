@@ -1,7 +1,6 @@
 #ifndef BUF_H
 #define BUF_H
 
-#include <stdbool.h>
 #define BUF_SIZE 16384
 
 struct buf {
@@ -11,11 +10,11 @@ struct buf {
 };
 
 /*
- * b: 0 = file buffer
- *    1 = append buffer
+ * buf: 'f' = file buffer
+ *      'a' = append buffer
  */
 struct piece {
-	bool b;
+	char buf;
 	size_t start;
 	size_t len;
 };
@@ -23,6 +22,8 @@ struct piece {
 struct operation {
 	size_t *del;
 	size_t *append;
+	size_t num_del;
+	size_t num_append;
 };
 
 struct piece_table {
@@ -30,10 +31,14 @@ struct piece_table {
 	struct operation *ops;
 	size_t *table;
 	size_t *undo_stack;
+	size_t num_pcs;
+	size_t num_ops;
+	size_t num_table;
+	size_t num_undo;
 };
 
+void pt_init(struct buf *fb, struct piece_table *pt);
 void vi_open(const char *f, struct buf *fb);
-
 char *vi_getline(const struct buf *fb, size_t n);
 
 #endif
