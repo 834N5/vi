@@ -30,11 +30,10 @@ struct piece_table {
 	struct piece *pcs;
 	struct operation *ops;
 	size_t *table;
-	size_t *undo_stack;
+	size_t undo;
 	size_t num_pcs;
 	size_t num_ops;
 	size_t num_table;
-	size_t num_undo;
 };
 
 void pt_init(struct buf *fb, struct piece_table *pt);

@@ -13,7 +13,6 @@ void free_all()
 	free(pt.pcs);
 	free(pt.ops);
 	free(pt.table);
-	free(pt.undo_stack);
 }
 
 void die(const char *err)
