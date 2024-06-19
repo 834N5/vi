@@ -30,11 +30,14 @@ int main(int argc, char *argv[])
 	pt_init(&fb, &pt);
 
 	/* temp testing */
+	pt_insert("test\n", 0, &ab, &pt);
+	pt_insert("test\n", 0, &ab, &pt);
+	pt_insert("test\n", 0, &ab, &pt);
 	/* print piece table */
 	for (size_t i = 0; i < pt.num_table; ++i) {
 		struct operation *op = pt.ops + *(pt.table + i);
-		for (size_t j = 0; j < op->num_append; ++j) {
-			struct piece *pcs = pt.pcs + *(op->append + j);
+		for (size_t j = 0; j < op->num_pcs; ++j) {
+			struct piece *pcs = pt.pcs + *(op->pcs + j);
 			if (pcs->buf == 'f')
 				fwrite(fb.b + pcs->start, sizeof(*(fb.b)), pcs->len, stdout);
 			else if (pcs->buf == 'a')

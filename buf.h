@@ -21,9 +21,9 @@ struct piece {
 
 struct operation {
 	size_t *del;
-	size_t *append;
+	size_t *pcs;
 	size_t num_del;
-	size_t num_append;
+	size_t num_pcs;
 };
 
 struct piece_table {
@@ -36,6 +36,7 @@ struct piece_table {
 	size_t num_table;
 };
 
+void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt);
 void pt_init(struct buf *fb, struct piece_table *pt);
 void vi_open(const char *f, struct buf *fb);
 char *vi_getline(const struct buf *fb, size_t n);

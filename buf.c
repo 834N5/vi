@@ -4,17 +4,66 @@
 #include "buf.h"
 #include "vi.h"
 
-/* add piece to piece table */
-size_t pt_add_piece(char b, size_t start, size_t len, struct piece_table *pt)
+#define LAST_OP (*(pt->ops + pt->num_ops - 1))
+#define LAST_OP_PC (*(LAST_OP.pcs + LAST_OP.num_pcs - 1))
+#define LAST_PC (*(pt->pcs + pt->num_pcs - 1))
+#define LAST_TABLE (*(pt->table + pt->num_table - 1))
+
+/* add piece to latest operation */
+void op_add_piece(char buf, size_t start, size_t len, struct piece_table *pt)
 {
-	struct piece *ptr = realloc(pt->pcs, sizeof(*pt->pcs) * ++pt->num_pcs);
+	void *ptr;
+
+	ptr = realloc(pt->pcs, sizeof(*pt->pcs) * ++pt->num_pcs);
 	if (ptr == NULL)
 		die("realloc failed");
 	pt->pcs = ptr;
-	pt->pcs->buf = b;
-	pt->pcs->start = start;
-	pt->pcs->len = len;
-	return pt->num_pcs - 1;
+	LAST_PC.buf = buf;
+	LAST_PC.start = start;
+	LAST_PC.len = len;
+
+	ptr = realloc(LAST_OP.pcs, sizeof(*(LAST_OP.pcs)) * ++LAST_OP.num_pcs);
+	if (ptr == NULL)
+		die("realloc failed");
+	LAST_OP.pcs = ptr;
+	LAST_OP_PC = pt->num_pcs - 1;
+}
+
+/* insert text in a specified position in the piece table */
+void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
+{
+	size_t len = strlen(b);
+	void *ptr;
+
+	ptr = realloc(ab->b, sizeof(ab->b) * (ab->len + len));
+	if (ptr == NULL)
+		die("realloc failed");
+	ab->b = ptr;
+	memcpy(ab->b + ab->len, b, len);
+	ab->len += len;
+	/* ab.lines has not been touched yet */
+
+	/* implement specified position later */
+	//pos = 0;
+
+	ptr = realloc(pt->ops, sizeof(*pt->ops) * ++pt->num_ops);
+	if (ptr == NULL)
+		die("realloc failed");
+	pt->ops = ptr;
+	LAST_OP.pcs = NULL;
+	LAST_OP.num_pcs = 0;
+	LAST_OP.del = NULL;
+	LAST_OP.num_del = 0;
+	op_add_piece('a', ab->len - len, len, pt);
+
+	ptr = realloc(pt->table, sizeof(*pt->table) * ++pt->num_table);
+	if (ptr == NULL)
+		die("realloc failed");
+	pt->table = ptr;
+	LAST_TABLE = pt->num_ops - 1;
+
+	/* implement undo later */
+	//pt->undo = 0;
 }
 
 /* initialise piece table */
@@ -27,23 +76,18 @@ void pt_init(struct buf *fb, struct piece_table *pt)
 	if ((ptr = malloc(sizeof(*pt->table))) == NULL)
 		die("malloc failed");
 	pt->table = ptr;
+	*pt->table = 0;
 	++pt->num_table;
 
 	if ((ptr = malloc(sizeof(*pt->ops))) == NULL)
 		die("malloc failed");
 	pt->ops = ptr;
 	++pt->num_ops;
-
-	if ((ptr = malloc(sizeof(*pt->ops->append))) == NULL)
-		die("malloc failed");
-	pt->ops->append = ptr;
-	++pt->ops->num_append;
-
-	*pt->table = 0;
-	*pt->ops->append = pt_add_piece('f', 0, fb->len, pt);
+	pt->ops->pcs = NULL;
+	pt->ops->num_pcs = 0;
 	pt->ops->del = NULL;
 	pt->ops->num_del = 0;
-
+	op_add_piece('f', 0, fb->len, pt);
 }
 
 /* copy file to buffer and append line break if needed */
