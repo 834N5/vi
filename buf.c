@@ -7,7 +7,6 @@
 #define LAST_OP (*(pt->ops + pt->num_ops - 1))
 #define LAST_OP_PC (*(LAST_OP.pcs + LAST_OP.num_pcs - 1))
 #define LAST_PC (*(pt->pcs + pt->num_pcs - 1))
-#define LAST_TABLE (*(pt->table + pt->num_table - 1))
 
 /* add piece to latest operation */
 void op_add_piece(char buf, size_t start, size_t len, struct piece_table *pt)
@@ -27,13 +26,16 @@ void op_add_piece(char buf, size_t start, size_t len, struct piece_table *pt)
 		die("realloc failed");
 	LAST_OP.pcs = ptr;
 	LAST_OP_PC = pt->num_pcs - 1;
+	LAST_OP.len += len;
 }
 
 /* insert text in a specified position in the piece table */
 void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 {
 	size_t len = strlen(b);
+	size_t table = 0;
 	void *ptr;
+	struct operation *op;
 
 	ptr = realloc(ab->b, sizeof(ab->b) * (ab->len + len));
 	if (ptr == NULL)
@@ -41,10 +43,24 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 	ab->b = ptr;
 	memcpy(ab->b + ab->len, b, len);
 	ab->len += len;
-	/* ab.lines has not been touched yet */
 
-	/* implement specified position later */
-	//pos = 0;
+	/* find position in the table to split */
+	while (table < pt->num_table && pos != 0) {
+		op = pt->ops + *(pt->table + table);
+		if (op->len > pos) {
+			/*
+			 * TODO:
+			 * copy new operation from old op
+			 * set del
+			 * add new pieces to op
+			 * replace table
+			 */
+			break;
+		} else {
+			pos -= op->len;
+		}
+		++table;
+	}
 
 	ptr = realloc(pt->ops, sizeof(*pt->ops) * ++pt->num_ops);
 	if (ptr == NULL)
@@ -54,13 +70,21 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 	LAST_OP.num_pcs = 0;
 	LAST_OP.del = NULL;
 	LAST_OP.num_del = 0;
+	LAST_OP.len = 0;
 	op_add_piece('a', ab->len - len, len, pt);
 
 	ptr = realloc(pt->table, sizeof(*pt->table) * ++pt->num_table);
 	if (ptr == NULL)
 		die("realloc failed");
 	pt->table = ptr;
-	LAST_TABLE = pt->num_ops - 1;
+	memmove(
+		pt->table + table + 1,
+		pt->table + table,
+		(pt->num_table - table - 1) * sizeof(*(pt->table))
+	);
+	*(pt->table + table) = pt->num_ops - 1;
+
+	pt->len += len;
 
 	/* implement undo later */
 	//pt->undo = 0;
@@ -87,7 +111,10 @@ void pt_init(struct buf *fb, struct piece_table *pt)
 	pt->ops->num_pcs = 0;
 	pt->ops->del = NULL;
 	pt->ops->num_del = 0;
+	pt->ops->len = 0;
 	op_add_piece('f', 0, fb->len, pt);
+
+	pt->len = fb->len;
 }
 
 /* copy file to buffer and append line break if needed */
@@ -142,6 +169,7 @@ void vi_open(const char *f, struct buf *fb)
 	}
 }
 
+/* not functional yet */
 /* get pointer to first char of line n */
 char *vi_getline(const struct buf *fb, size_t n) {
 	char *b = fb->b;

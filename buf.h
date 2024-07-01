@@ -3,6 +3,10 @@
 
 #define BUF_SIZE 16384
 
+/*
+ * TODO: refactor line counting
+ * buf.lines to be removed
+ */
 struct buf {
 	char *b;
 	size_t len;
@@ -24,6 +28,7 @@ struct operation {
 	size_t *pcs;
 	size_t num_del;
 	size_t num_pcs;
+	size_t len;
 };
 
 struct piece_table {
@@ -34,6 +39,7 @@ struct piece_table {
 	size_t num_pcs;
 	size_t num_ops;
 	size_t num_table;
+	size_t len;
 };
 
 void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt);

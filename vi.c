@@ -30,9 +30,10 @@ int main(int argc, char *argv[])
 	pt_init(&fb, &pt);
 
 	/* temp testing */
-	pt_insert("test\n", 0, &ab, &pt);
-	pt_insert("test\n", 0, &ab, &pt);
-	pt_insert("test\n", 0, &ab, &pt);
+	pt_insert("test 1\n", 0, &ab, &pt);
+	pt_insert("test 2\n", 12, &ab, &pt);
+	pt_insert("test 3\n", 7, &ab, &pt);
+
 	/* print piece table */
 	for (size_t i = 0; i < pt.num_table; ++i) {
 		struct operation *op = pt.ops + *(pt.table + i);
@@ -45,8 +46,10 @@ int main(int argc, char *argv[])
 		}
 	}
 	//fwrite(fb.b, sizeof(*(fb.b)), fb.len, stdout);
+	/*
 	printf("buffer: %zubytes\n", sizeof(*(fb.b)) * (fb.len));
 	printf("lines: %zu\n", fb.lines);
+	*/
 
 	/*
 	printf("line %zu:\n", fb.lines);
@@ -55,6 +58,7 @@ int main(int argc, char *argv[])
 		putchar(*c);
 	} while (*c != '\n' && *c++ != '\0');
 	*/
+	/* temp testing ends */
 
 	exit(EXIT_SUCCESS);
 }
