@@ -4,38 +4,61 @@
 #include "buf.h"
 #include "vi.h"
 
-#define LAST_OP (*(pt->ops + pt->num_ops - 1))
-#define LAST_OP_PC (*(LAST_OP.pcs + LAST_OP.num_pcs - 1))
-#define LAST_PC (*(pt->pcs + pt->num_pcs - 1))
+/* TODO:
+ * rename pointer variables with appropriate names
+ * pcs -> pcs_ptr or pcs_p
+ */
 
-/* add piece to latest operation */
-void op_add_piece(char buf, size_t start, size_t len, struct piece_table *pt)
+/* add piece to piece table */
+void pt_add_piece(char buf, size_t start, size_t len, struct piece_table *pt)
 {
-	void *ptr;
+	struct piece *ptr;
 
 	ptr = realloc(pt->pcs, sizeof(*pt->pcs) * ++pt->num_pcs);
 	if (ptr == NULL)
 		die("realloc failed");
 	pt->pcs = ptr;
-	LAST_PC.buf = buf;
-	LAST_PC.start = start;
-	LAST_PC.len = len;
 
-	ptr = realloc(LAST_OP.pcs, sizeof(*(LAST_OP.pcs)) * ++LAST_OP.num_pcs);
+	ptr = pt->pcs + pt->num_pcs - 1;
+	ptr->buf = buf;
+	ptr->start = start;
+	ptr->len = len;
+}
+
+/* insert latest piece to latest operation in a specified position */
+void op_insert_piece(struct piece_table *pt, size_t pos)
+{
+	struct operation *op_ptr;
+	size_t *ptr;
+
+	op_ptr = pt->ops + pt->num_ops - 1;
+	ptr = op_ptr->pcs;
+
+	ptr = realloc(ptr, sizeof(*(ptr)) * ++op_ptr->num_pcs);
 	if (ptr == NULL)
 		die("realloc failed");
-	LAST_OP.pcs = ptr;
-	LAST_OP_PC = pt->num_pcs - 1;
-	LAST_OP.len += len;
+	op_ptr->pcs = ptr;
+
+	if (pos != op_ptr->num_pcs - 1) {
+		memmove(
+			ptr + pos + 1,
+			ptr + pos,
+			(op_ptr->num_pcs - pos - 1) * sizeof(*(op_ptr->pcs))
+		);
+	}
+
+	*(op_ptr->pcs + pos) = pt->num_pcs - 1;
+	op_ptr->len += (pt->pcs + pt->num_pcs - 1)->len;
 }
 
 /* insert text in a specified position in the piece table */
 void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 {
+	int split = 0;
 	size_t len = strlen(b);
 	size_t table = 0;
 	void *ptr;
-	struct operation *op;
+	struct operation *op_ptr;
 
 	ptr = realloc(ab->b, sizeof(ab->b) * (ab->len + len));
 	if (ptr == NULL)
@@ -46,8 +69,9 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 
 	/* find position in the table to split */
 	while (table < pt->num_table && pos != 0) {
-		op = pt->ops + *(pt->table + table);
-		if (op->len > pos) {
+		op_ptr = pt->ops + *(pt->table + table);
+		if (op_ptr->len > pos) {
+			split = 1;
 			/*
 			 * TODO:
 			 * copy new operation from old op
@@ -57,37 +81,44 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 			 */
 			break;
 		} else {
-			pos -= op->len;
+			pos -= op_ptr->len;
 		}
 		++table;
 	}
 
-	ptr = realloc(pt->ops, sizeof(*pt->ops) * ++pt->num_ops);
-	if (ptr == NULL)
-		die("realloc failed");
-	pt->ops = ptr;
-	LAST_OP.pcs = NULL;
-	LAST_OP.num_pcs = 0;
-	LAST_OP.del = NULL;
-	LAST_OP.num_del = 0;
-	LAST_OP.len = 0;
-	op_add_piece('a', ab->len - len, len, pt);
+	if (split) {
+		puts("split!!!");
+	} else if (!split) {
+		op_ptr = realloc(pt->ops, sizeof(*pt->ops) * ++pt->num_ops);
+		if (op_ptr == NULL)
+			die("realloc failed");
+		pt->ops = op_ptr;
 
-	ptr = realloc(pt->table, sizeof(*pt->table) * ++pt->num_table);
-	if (ptr == NULL)
-		die("realloc failed");
-	pt->table = ptr;
-	memmove(
-		pt->table + table + 1,
-		pt->table + table,
-		(pt->num_table - table - 1) * sizeof(*(pt->table))
-	);
-	*(pt->table + table) = pt->num_ops - 1;
+		op_ptr = pt->ops + pt->num_ops - 1;
+		op_ptr->pcs = NULL;
+		op_ptr->num_pcs = 0;
+		op_ptr->del = NULL;
+		op_ptr->num_del = 0;
+		op_ptr->len = 0;
+		pt_add_piece('a', ab->len - len, len, pt);
+		op_insert_piece(pt, 0);
 
-	pt->len += len;
+		ptr = realloc(pt->table, sizeof(*pt->table) * ++pt->num_table);
+		if (ptr == NULL)
+			die("realloc failed");
+		pt->table = ptr;
+		memmove(
+			pt->table + table + 1,
+			pt->table + table,
+			(pt->num_table - table - 1) * sizeof(*(pt->table))
+		);
+		*(pt->table + table) = pt->num_ops - 1;
 
-	/* implement undo later */
-	//pt->undo = 0;
+		pt->len += len;
+
+		/* implement undo later */
+		//pt->undo = 0;
+	}
 }
 
 /* initialise piece table */
@@ -112,7 +143,8 @@ void pt_init(struct buf *fb, struct piece_table *pt)
 	pt->ops->del = NULL;
 	pt->ops->num_del = 0;
 	pt->ops->len = 0;
-	op_add_piece('f', 0, fb->len, pt);
+	pt_add_piece('f', 0, fb->len, pt);
+	op_insert_piece(pt, 0);
 
 	pt->len = fb->len;
 }
