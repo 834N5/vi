@@ -4,11 +4,6 @@
 #include "buf.h"
 #include "vi.h"
 
-/* TODO:
- * rename pointer variables with appropriate names
- * pcs -> pcs_ptr or pcs_p
- */
-
 /* add piece to piece table */
 void pt_add_piece(char buf, size_t start, size_t len, struct piece_table *pt)
 {
