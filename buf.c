@@ -29,7 +29,7 @@ void op_insert_piece(struct piece_table *pt, size_t pos)
 	op_ptr = pt->ops + pt->num_ops - 1;
 	ptr = op_ptr->pcs;
 
-	ptr = realloc(ptr, sizeof(*(ptr)) * ++op_ptr->num_pcs);
+	ptr = realloc(ptr, sizeof(*op_ptr->pcs) * ++op_ptr->num_pcs);
 	if (ptr == NULL)
 		die("realloc failed");
 	op_ptr->pcs = ptr;
@@ -38,7 +38,7 @@ void op_insert_piece(struct piece_table *pt, size_t pos)
 		memmove(
 			ptr + pos + 1,
 			ptr + pos,
-			(op_ptr->num_pcs - pos - 1) * sizeof(*(op_ptr->pcs))
+			(op_ptr->num_pcs - pos - 1) * sizeof(*op_ptr->pcs)
 		);
 	}
 
@@ -50,10 +50,14 @@ void op_insert_piece(struct piece_table *pt, size_t pos)
 void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 {
 	int split = 0;
-	size_t len = strlen(b);
-	size_t table = 0;
+	size_t len;
+	size_t table_split = 0;
+	size_t op_split = 0;
+	size_t pc_split = 0;
 	void *ptr;
 	struct operation *op_ptr;
+	struct piece *pc_ptr;
+	len = strlen(b);
 
 	ptr = realloc(ab->b, sizeof(ab->b) * (ab->len + len));
 	if (ptr == NULL)
@@ -63,33 +67,84 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 	ab->len += len;
 
 	/* find position in the table to split */
-	while (table < pt->num_table && pos != 0) {
-		op_ptr = pt->ops + *(pt->table + table);
+	while (table_split < pt->num_table && pos != 0) {
+		op_ptr = pt->ops + *(pt->table + table_split);
 		if (op_ptr->len > pos) {
 			split = 1;
-			/*
-			 * TODO:
-			 * copy new operation from old op
-			 * set del
-			 * add new pieces to op
-			 * replace table
-			 */
 			break;
 		} else {
 			pos -= op_ptr->len;
 		}
-		++table;
+		++table_split;
+	}
+	printf("table_split %lu\n", table_split);
+	printf("pos: %lu\n", pos);
+
+	/*
+	 * TODO:
+	 * copy new operation from old op (exclude del)
+	 * set del
+	 * add new pieces to op
+	 * replace table
+	 */
+
+ 	/* find position in the operation to split */
+	if (split == 1) {
+		puts("split op!!!");
+		while (op_split < op_ptr->num_pcs && pos != 0) {
+			pc_ptr = pt->pcs + *(op_ptr->pcs + op_split);
+			if (pc_ptr->len > pos) {
+				split = 2;
+				puts("split piece");
+				break;
+			} else {
+				pos -= pc_ptr->len;
+			}
+			++op_split;
+		}
+	}
+	printf("op_split %lu\n", op_split);
+	printf("pos: %lu\n", pos);
+	puts("\n\n");
+
+
+	op_ptr = realloc(pt->ops, sizeof(*pt->ops) * ++pt->num_ops);
+	if (op_ptr == NULL)
+		die("realloc failed");
+	pt->ops = op_ptr;
+	op_ptr = pt->ops + pt->num_ops - 1;
+
+	/*
+	if (split == 2) {
+	}
+	*/
+
+	if (split == 1) {
+		op_ptr->num_pcs = (pt->ops + *(pt->table + table_split))->num_pcs;
+		ptr = malloc(sizeof(op_ptr->pcs) * op_ptr->num_pcs);
+		if (ptr == NULL)
+			die("malloc failed");
+		op_ptr->pcs = ptr;
+		memcpy(
+			op_ptr->pcs,
+			(pt->ops + *(pt->table + table_split))->pcs,
+			(op_ptr->num_pcs) * sizeof(*pt->ops->pcs)
+		);
+		op_ptr->len = (pt->ops + *(pt->table + table_split))->len;
+
+		ptr = malloc(sizeof(*op_ptr->del));
+		if (ptr == NULL)
+			die("malloc failed");
+		op_ptr->del = ptr;
+		*op_ptr->del = *(pt->table + table_split);
+		op_ptr->num_del = 1;
+
+		pt_add_piece('a', ab->len - len, len, pt);
+		op_insert_piece(pt, op_split);
+		*(pt->table + table_split) = pt->num_pcs - 1;
 	}
 
-	if (split) {
-		puts("split!!!");
-	} else if (!split) {
-		op_ptr = realloc(pt->ops, sizeof(*pt->ops) * ++pt->num_ops);
-		if (op_ptr == NULL)
-			die("realloc failed");
-		pt->ops = op_ptr;
-
-		op_ptr = pt->ops + pt->num_ops - 1;
+	if (split == 0) {
 		op_ptr->pcs = NULL;
 		op_ptr->num_pcs = 0;
 		op_ptr->del = NULL;
@@ -103,17 +158,17 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 			die("realloc failed");
 		pt->table = ptr;
 		memmove(
-			pt->table + table + 1,
-			pt->table + table,
-			(pt->num_table - table - 1) * sizeof(*(pt->table))
+			pt->table + table_split + 1,
+			pt->table + table_split,
+			(pt->num_table - table_split - 1) * sizeof(*pt->table)
 		);
-		*(pt->table + table) = pt->num_ops - 1;
-
-		pt->len += len;
-
-		/* implement undo later */
-		//pt->undo = 0;
+		*(pt->table + table_split) = pt->num_ops - 1;
 	}
+
+	pt->len += len;
+
+	/* implement undo later */
+	//pt->undo = 0;
 }
 
 /* initialise piece table */

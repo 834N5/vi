@@ -33,6 +33,8 @@ int main(int argc, char *argv[])
 	pt_insert("test 1\n", 0, &ab, &pt);
 	pt_insert("test 2\n", 12, &ab, &pt);
 	pt_insert("test 3\n", 7, &ab, &pt);
+	pt_insert("test 4\n", 1, &ab, &pt);
+	pt_insert("test 5\n", 7, &ab, &pt);
 
 	/* print piece table */
 	for (size_t i = 0; i < pt.num_table; ++i) {
