@@ -10,6 +10,10 @@ void free_all()
 {
 	free(fb.b);
 	free(ab.b);
+	for (size_t i = 0; i < pt.num_ops; ++i) {
+		free((pt.ops + i)->pcs);
+		free((pt.ops + i)->del);
+	}
 	free(pt.pcs);
 	free(pt.ops);
 	free(pt.table);
