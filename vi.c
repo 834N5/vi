@@ -31,10 +31,10 @@ int main(int argc, char *argv[])
 
 	/* temp testing */
 	pt_insert("test 1\n", 0, &ab, &pt);
-	pt_insert("test 2\n", 12, &ab, &pt);
-	pt_insert("test 3\n", 7, &ab, &pt);
-	pt_insert("test 4\n", 1, &ab, &pt);
-	pt_insert("test 5\n", 7, &ab, &pt);
+	pt_insert("test 2\n", 7, &ab, &pt);
+	pt_insert("test 3\n", 14, &ab, &pt);
+	pt_insert(" 4 &", 4, &ab, &pt);
+	pt_insert(" 5 &", 8, &ab, &pt);
 
 	/* print piece table */
 	for (size_t i = 0; i < pt.num_table; ++i) {
@@ -47,19 +47,6 @@ int main(int argc, char *argv[])
 				fwrite(ab.b + pcs->start, sizeof(*(ab.b)), pcs->len, stdout);
 		}
 	}
-	//fwrite(fb.b, sizeof(*(fb.b)), fb.len, stdout);
-	/*
-	printf("buffer: %zubytes\n", sizeof(*(fb.b)) * (fb.len));
-	printf("lines: %zu\n", fb.lines);
-	*/
-
-	/*
-	printf("line %zu:\n", fb.lines);
-	char *c = vi_getline(&fb, fb.lines);
-	do {
-		putchar(*c);
-	} while (*c != '\n' && *c++ != '\0');
-	*/
 	/* temp testing ends */
 
 	exit(EXIT_SUCCESS);

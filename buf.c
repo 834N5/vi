@@ -50,14 +50,13 @@ void op_insert_piece(struct piece_table *pt, size_t pos)
 void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 {
 	int split = 0;
-	size_t len;
+	size_t len = strlen(b);
 	size_t table_split = 0;
 	size_t op_split = 0;
 	size_t pc_split = 0;
 	void *ptr;
 	struct operation *op_ptr;
 	struct piece *pc_ptr;
-	len = strlen(b);
 
 	ptr = realloc(ab->b, sizeof(ab->b) * (ab->len + len));
 	if (ptr == NULL)
@@ -77,35 +76,23 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 		}
 		++table_split;
 	}
-	printf("table_split %lu\n", table_split);
-	printf("pos: %lu\n", pos);
-
-	/*
-	 * TODO:
-	 * copy new operation from old op (exclude del)
-	 * set del
-	 * add new pieces to op
-	 * replace table
-	 */
+	if (pt->num_table != 0)
+		op_split = *(pt->table + table_split);
 
  	/* find position in the operation to split */
 	if (split == 1) {
-		puts("split op!!!");
-		while (op_split < op_ptr->num_pcs && pos != 0) {
-			pc_ptr = pt->pcs + *(op_ptr->pcs + op_split);
+		while (pc_split < op_ptr->num_pcs && pos != 0) {
+			pc_ptr = pt->pcs + *(op_ptr->pcs + pc_split);
 			if (pc_ptr->len > pos) {
+				/* need to split a piece */
 				split = 2;
-				puts("split piece");
 				break;
 			} else {
 				pos -= pc_ptr->len;
 			}
-			++op_split;
+			++pc_split;
 		}
 	}
-	printf("op_split %lu\n", op_split);
-	printf("pos: %lu\n", pos);
-	puts("\n\n");
 
 
 	op_ptr = realloc(pt->ops, sizeof(*pt->ops) * ++pt->num_ops);
@@ -114,34 +101,74 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 	pt->ops = op_ptr;
 	op_ptr = pt->ops + pt->num_ops - 1;
 
-	/*
 	if (split == 2) {
-	}
-	*/
-
-	if (split == 1) {
-		op_ptr->num_pcs = (pt->ops + *(pt->table + table_split))->num_pcs;
+		op_ptr->num_pcs = (pt->ops + op_split)->num_pcs;
+		--op_ptr->num_pcs;
 		ptr = malloc(sizeof(op_ptr->pcs) * op_ptr->num_pcs);
 		if (ptr == NULL)
 			die("malloc failed");
 		op_ptr->pcs = ptr;
 		memcpy(
 			op_ptr->pcs,
-			(pt->ops + *(pt->table + table_split))->pcs,
-			(op_ptr->num_pcs) * sizeof(*pt->ops->pcs)
+			(pt->ops + op_split)->pcs,
+			(pc_split) * sizeof(*pt->ops->pcs)
 		);
-		op_ptr->len = (pt->ops + *(pt->table + table_split))->len;
+		memcpy(
+			op_ptr->pcs + pc_split,
+			(pt->ops + op_split)->pcs + pc_split + 1,
+			(op_ptr->num_pcs - pc_split) * sizeof(*pt->ops->pcs)
+		);
+		//(pt->ops + op_split)->pcs + pc_split
+		op_ptr->len = (pt->ops + op_split)->len - pc_ptr->len;
 
 		ptr = malloc(sizeof(*op_ptr->del));
 		if (ptr == NULL)
 			die("malloc failed");
 		op_ptr->del = ptr;
-		*op_ptr->del = *(pt->table + table_split);
+		*op_ptr->del = op_split;
+		op_ptr->num_del = 1;
+
+		pt_add_piece(
+			pc_ptr->buf,
+			pc_ptr->start + pos, pc_ptr->len - pos,
+			pt
+		);
+		op_insert_piece(pt, pc_split);
+		pc_ptr = pt->pcs + *((pt->ops + op_split)->pcs + pc_split);
+
+		pt_add_piece('a', ab->len - len, len, pt);
+		op_insert_piece(pt, pc_split);
+		pc_ptr = pt->pcs + *((pt->ops + op_split)->pcs + pc_split);
+
+		pt_add_piece(pc_ptr->buf, pc_ptr->start, pos, pt);
+		op_insert_piece(pt, pc_split);
+
+		*(pt->table + table_split) = pt->num_ops - 1;
+	}
+
+	if (split == 1) {
+		op_ptr->num_pcs = (pt->ops + op_split)->num_pcs;
+		ptr = malloc(sizeof(op_ptr->pcs) * op_ptr->num_pcs);
+		if (ptr == NULL)
+			die("malloc failed");
+		op_ptr->pcs = ptr;
+		memcpy(
+			op_ptr->pcs,
+			(pt->ops + op_split)->pcs,
+			(op_ptr->num_pcs) * sizeof(*pt->ops->pcs)
+		);
+		op_ptr->len = (pt->ops + op_split)->len;
+
+		ptr = malloc(sizeof(*op_ptr->del));
+		if (ptr == NULL)
+			die("malloc failed");
+		op_ptr->del = ptr;
+		*op_ptr->del = op_split;
 		op_ptr->num_del = 1;
 
 		pt_add_piece('a', ab->len - len, len, pt);
-		op_insert_piece(pt, op_split);
-		*(pt->table + table_split) = pt->num_pcs - 1;
+		op_insert_piece(pt, pc_split);
+		*(pt->table + table_split) = pt->num_ops - 1;
 	}
 
 	if (split == 0) {
@@ -167,7 +194,7 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 
 	pt->len += len;
 
-	/* implement undo later */
+	/* TODO: implement undo */
 	//pt->undo = 0;
 }
 
