@@ -101,6 +101,7 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 	pt->ops = op_ptr;
 	op_ptr = pt->ops + pt->num_ops - 1;
 
+	/* split piece */
 	if (split == 2) {
 		op_ptr->num_pcs = (pt->ops + op_split)->num_pcs;
 		--op_ptr->num_pcs;
@@ -118,7 +119,6 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 			(pt->ops + op_split)->pcs + pc_split + 1,
 			(op_ptr->num_pcs - pc_split) * sizeof(*pt->ops->pcs)
 		);
-		//(pt->ops + op_split)->pcs + pc_split
 		op_ptr->len = (pt->ops + op_split)->len - pc_ptr->len;
 
 		ptr = malloc(sizeof(*op_ptr->del));
@@ -146,6 +146,7 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 		*(pt->table + table_split) = pt->num_ops - 1;
 	}
 
+	/* split operation without splitting piece */
 	if (split == 1) {
 		op_ptr->num_pcs = (pt->ops + op_split)->num_pcs;
 		ptr = malloc(sizeof(op_ptr->pcs) * op_ptr->num_pcs);
@@ -171,6 +172,7 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 		*(pt->table + table_split) = pt->num_ops - 1;
 	}
 
+	/* no splitting required */
 	if (split == 0) {
 		op_ptr->pcs = NULL;
 		op_ptr->num_pcs = 0;
