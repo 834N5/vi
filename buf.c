@@ -60,6 +60,7 @@ void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece
 	size_t lines = 0;
 	size_t lines_tmp = 0;
 	void *ptr;
+	char *char_ptr;
 	struct operation *op_ptr;
 	struct piece *pc_ptr;
 
@@ -70,10 +71,10 @@ void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece
 	memcpy(ab->b + ab->len, b, len);
 	ab->len += len;
 
-	ptr = b;
-	while ((ptr = strchr(ptr, '\n')) != NULL) {
+	char_ptr = b;
+	while ((char_ptr = strchr(char_ptr, '\n')) != NULL) {
 		++lines;
-		++ptr;
+		++char_ptr;
 	}
 
 	/* find position in the table to split */
@@ -142,23 +143,27 @@ void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece
 		op_ptr->lines = (pt->ops + op_split)->lines - pc_ptr->lines;
 
 		if (pc_ptr->buf == 'a') {
-			ptr = ab->b + pc_ptr->start;
+			char_ptr = ab->b + pc_ptr->start;
 			for (size_t i = 0; i < pc_ptr->lines; ++i) {
-				ptr = strchr(ptr, '\n');
-				if (ptr < (ab->b + pc_ptr->start + pos))
+				char_ptr = strchr(char_ptr, '\n');
+				if (char_ptr < (ab->b + pc_ptr->start + pos)) {
 					++lines_tmp;
-				else
+					++char_ptr;
+				} else {
 					break;
+				}
 			}
 		}
 		if (pc_ptr->buf == 'f') {
-			ptr = fb->b + pc_ptr->start;
+			char_ptr = fb->b + pc_ptr->start;
 			for (size_t i = 0; i < pc_ptr->lines; ++i) {
-				ptr = strchr(ptr, '\n');
-				if (ptr < (fb->b + pc_ptr->start + pos))
+				char_ptr = strchr(char_ptr, '\n');
+				if (char_ptr < (fb->b + pc_ptr->start + pos)) {
 					++lines_tmp;
-				else
+					++char_ptr;
+				} else {
 					break;
+				}
 			}
 		}
 
@@ -244,6 +249,7 @@ void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece
 void pt_init(struct buf *fb, struct piece_table *pt)
 {
 	void *ptr;
+	char *char_ptr;
 	size_t lines = 0;
 
 	if (fb->b == NULL)
@@ -266,10 +272,10 @@ void pt_init(struct buf *fb, struct piece_table *pt)
 	pt->ops->len = 0;
 	pt->ops->lines = 0;
 
-	ptr = fb->b;
-	while ((ptr = strchr(ptr, '\n')) != NULL) {
+	char_ptr = fb->b;
+	while ((char_ptr = strchr(char_ptr, '\n')) != NULL) {
 		++lines;
-		++ptr;
+		++char_ptr;
 	}
 
 	pt_add_piece('f', 0, fb->len, lines, pt);
