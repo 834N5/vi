@@ -5,7 +5,7 @@
 #include "vi.h"
 
 /* add piece to piece table */
-void pt_add_piece(char buf, size_t start, size_t len, struct piece_table *pt)
+void pt_add_piece(char buf, size_t start, size_t len, size_t lines, struct piece_table *pt)
 {
 	struct piece *ptr;
 
@@ -18,6 +18,8 @@ void pt_add_piece(char buf, size_t start, size_t len, struct piece_table *pt)
 	ptr->buf = buf;
 	ptr->start = start;
 	ptr->len = len;
+	ptr->lines = lines;
+
 }
 
 /* insert latest piece to latest operation in a specified position */
@@ -44,16 +46,19 @@ void op_insert_piece(struct piece_table *pt, size_t pos)
 
 	*(op_ptr->pcs + pos) = pt->num_pcs - 1;
 	op_ptr->len += (pt->pcs + pt->num_pcs - 1)->len;
+	op_ptr->lines += (pt->pcs + pt->num_pcs - 1)->lines;
 }
 
 /* insert text in a specified position in the piece table */
-void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
+void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece_table *pt)
 {
 	int split = 0;
 	size_t len = strlen(b);
 	size_t table_split = 0;
 	size_t op_split = 0;
 	size_t pc_split = 0;
+	size_t lines = 0;
+	size_t lines_tmp = 0;
 	void *ptr;
 	struct operation *op_ptr;
 	struct piece *pc_ptr;
@@ -64,6 +69,12 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 	ab->b = ptr;
 	memcpy(ab->b + ab->len, b, len);
 	ab->len += len;
+
+	ptr = b;
+	while ((ptr = strchr(ptr, '\n')) != NULL) {
+		++lines;
+		++ptr;
+	}
 
 	/* find position in the table to split */
 	while (table_split < pt->num_table && pos != 0) {
@@ -119,7 +130,6 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 			(pt->ops + op_split)->pcs + pc_split + 1,
 			(op_ptr->num_pcs - pc_split) * sizeof(*pt->ops->pcs)
 		);
-		op_ptr->len = (pt->ops + op_split)->len - pc_ptr->len;
 
 		ptr = malloc(sizeof(*op_ptr->del));
 		if (ptr == NULL)
@@ -128,19 +138,45 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 		*op_ptr->del = op_split;
 		op_ptr->num_del = 1;
 
+		op_ptr->len = (pt->ops + op_split)->len - pc_ptr->len;
+		op_ptr->lines = (pt->ops + op_split)->lines - pc_ptr->lines;
+
+		if (pc_ptr->buf == 'a') {
+			ptr = ab->b + pc_ptr->start;
+			for (size_t i = 0; i < pc_ptr->lines; ++i) {
+				ptr = strchr(ptr, '\n');
+				if (ptr < (ab->b + pc_ptr->start + pos))
+					++lines_tmp;
+				else
+					break;
+			}
+		}
+		if (pc_ptr->buf == 'f') {
+			ptr = fb->b + pc_ptr->start;
+			for (size_t i = 0; i < pc_ptr->lines; ++i) {
+				ptr = strchr(ptr, '\n');
+				if (ptr < (fb->b + pc_ptr->start + pos))
+					++lines_tmp;
+				else
+					break;
+			}
+		}
+
 		pt_add_piece(
 			pc_ptr->buf,
-			pc_ptr->start + pos, pc_ptr->len - pos,
+			pc_ptr->start + pos,
+			pc_ptr->len - pos,
+			pc_ptr->lines - lines_tmp,
 			pt
 		);
 		op_insert_piece(pt, pc_split);
 		pc_ptr = pt->pcs + *((pt->ops + op_split)->pcs + pc_split);
 
-		pt_add_piece('a', ab->len - len, len, pt);
+		pt_add_piece('a', ab->len - len, len, lines, pt);
 		op_insert_piece(pt, pc_split);
 		pc_ptr = pt->pcs + *((pt->ops + op_split)->pcs + pc_split);
 
-		pt_add_piece(pc_ptr->buf, pc_ptr->start, pos, pt);
+		pt_add_piece(pc_ptr->buf, pc_ptr->start, pos, lines_tmp, pt);
 		op_insert_piece(pt, pc_split);
 
 		*(pt->table + table_split) = pt->num_ops - 1;
@@ -158,7 +194,6 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 			(pt->ops + op_split)->pcs,
 			(op_ptr->num_pcs) * sizeof(*pt->ops->pcs)
 		);
-		op_ptr->len = (pt->ops + op_split)->len;
 
 		ptr = malloc(sizeof(*op_ptr->del));
 		if (ptr == NULL)
@@ -167,7 +202,10 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 		*op_ptr->del = op_split;
 		op_ptr->num_del = 1;
 
-		pt_add_piece('a', ab->len - len, len, pt);
+		op_ptr->len = (pt->ops + op_split)->len;
+		op_ptr->lines = (pt->ops + op_split)->lines;
+
+		pt_add_piece('a', ab->len - len, len, lines, pt);
 		op_insert_piece(pt, pc_split);
 		*(pt->table + table_split) = pt->num_ops - 1;
 	}
@@ -179,7 +217,8 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 		op_ptr->del = NULL;
 		op_ptr->num_del = 0;
 		op_ptr->len = 0;
-		pt_add_piece('a', ab->len - len, len, pt);
+		op_ptr->lines = 0;
+		pt_add_piece('a', ab->len - len, len, lines, pt);
 		op_insert_piece(pt, 0);
 
 		ptr = realloc(pt->table, sizeof(*pt->table) * ++pt->num_table);
@@ -195,6 +234,7 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 	}
 
 	pt->len += len;
+	pt->lines += lines;
 
 	/* TODO: implement undo */
 	//pt->undo = 0;
@@ -204,6 +244,8 @@ void pt_insert(char *b, size_t pos, struct buf *ab, struct piece_table *pt)
 void pt_init(struct buf *fb, struct piece_table *pt)
 {
 	void *ptr;
+	size_t lines = 0;
+
 	if (fb->b == NULL)
 		return;
 
@@ -222,10 +264,19 @@ void pt_init(struct buf *fb, struct piece_table *pt)
 	pt->ops->del = NULL;
 	pt->ops->num_del = 0;
 	pt->ops->len = 0;
-	pt_add_piece('f', 0, fb->len, pt);
+	pt->ops->lines = 0;
+
+	ptr = fb->b;
+	while ((ptr = strchr(ptr, '\n')) != NULL) {
+		++lines;
+		++ptr;
+	}
+
+	pt_add_piece('f', 0, fb->len, lines, pt);
 	op_insert_piece(pt, 0);
 
 	pt->len = fb->len;
+	pt->lines = lines;
 }
 
 /* copy file to buffer and append line break if needed */
@@ -269,22 +320,11 @@ void vi_open(const char *f, struct buf *fb)
 		fb->b = ptr;
 		fb->b[fb->len] = '\0';
 	}
-
-	/* Count lines unless file is empty */
-	if (fb->b != NULL) {
-		ptr = fb->b;
-		while ((ptr = strchr(ptr, '\n')) != NULL) {
-			++fb->lines;
-			++ptr;
-		}
-	}
 }
 
 /* not functional yet */
 /* get pointer to first char of line n */
-char *vi_getline(const struct buf *fb, size_t n) {
-	char *b = fb->b;
-	for (size_t i = 1; i < n && i < fb->lines; ++i)
-		b = strchr(b, '\n') + 1;
-	return b;
+/*
+char *vi_getline() {
 }
+*/

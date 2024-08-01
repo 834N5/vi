@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include "buf.h"
 
-struct buf fb = {NULL, 0, 0};
-struct buf ab = {NULL, 0, 0};
+struct buf fb = {NULL, 0};
+struct buf ab = {NULL, 0};
 struct piece_table pt = {NULL};
 
 void free_all()
@@ -34,21 +34,60 @@ int main(int argc, char *argv[])
 	pt_init(&fb, &pt);
 
 	/* temp testing */
-	pt_insert("test 1\n", 0, &ab, &pt);
-	pt_insert("test 2\n", 7, &ab, &pt);
-	pt_insert("test 3\n", 14, &ab, &pt);
-	pt_insert(" 4 &", 4, &ab, &pt);
-	pt_insert(" 5 &", 8, &ab, &pt);
+	pt_insert("test 1\n", 0, &fb, &ab, &pt);
+	pt_insert("test 2\n", 12, &fb, &ab, &pt);
+	pt_insert("test 3\n", 19, &fb, &ab, &pt);
+	pt_insert(" 4 &", 4, &fb, &ab, &pt);
+	pt_insert(" 5 &", 8, &fb, &ab, &pt);
+
+	printf("total lines: %lu\n", pt.lines);
+	for (size_t i = 0; i < pt.num_table; ++i) {
+		struct operation *op = pt.ops + *(pt.table + i);
+		for (size_t j = 0; j < op->num_pcs; ++j) {
+			struct piece *pc = pt.pcs + *(op->pcs + j);
+			if (pc->buf == 'f')
+				fwrite(fb.b + pc->start, sizeof(*(fb.b)), pc->len, stdout);
+			else if (pc->buf == 'a')
+				fwrite(ab.b + pc->start, sizeof(*(ab.b)), pc->len, stdout);
+		}
+	}
+	puts("\n####################\n\n");
+	for (size_t i = 0; i < pt.num_table; ++i) {
+		struct operation *op = pt.ops + *(pt.table + i);
+		printf("operation lines: %lu\n", op->lines);
+		for (size_t j = 0; j < op->num_pcs; ++j) {
+			struct piece *pc = pt.pcs + *(op->pcs + j);
+			if (pc->buf == 'f')
+				fwrite(fb.b + pc->start, sizeof(*(fb.b)), pc->len, stdout);
+			else if (pc->buf == 'a')
+				fwrite(ab.b + pc->start, sizeof(*(ab.b)), pc->len, stdout);
+		}
+		puts("\n####################");
+	}
+	puts("\n\n");
+	for (size_t i = 0; i < pt.num_table; ++i) {
+		struct operation *op = pt.ops + *(pt.table + i);
+		for (size_t j = 0; j < op->num_pcs; ++j) {
+			struct piece *pc = pt.pcs + *(op->pcs + j);
+			printf("piece lines: %lu\n", pc->lines);
+			if (pc->buf == 'f')
+				fwrite(fb.b + pc->start, sizeof(*(fb.b)), pc->len, stdout);
+			else if (pc->buf == 'a')
+				fwrite(ab.b + pc->start, sizeof(*(ab.b)), pc->len, stdout);
+			puts("\n####################");
+		}
+	}
+	puts("\n\n__output__");
 
 	/* print piece table */
 	for (size_t i = 0; i < pt.num_table; ++i) {
 		struct operation *op = pt.ops + *(pt.table + i);
 		for (size_t j = 0; j < op->num_pcs; ++j) {
-			struct piece *pcs = pt.pcs + *(op->pcs + j);
-			if (pcs->buf == 'f')
-				fwrite(fb.b + pcs->start, sizeof(*(fb.b)), pcs->len, stdout);
-			else if (pcs->buf == 'a')
-				fwrite(ab.b + pcs->start, sizeof(*(ab.b)), pcs->len, stdout);
+			struct piece *pc = pt.pcs + *(op->pcs + j);
+			if (pc->buf == 'f')
+				fwrite(fb.b + pc->start, sizeof(*(fb.b)), pc->len, stdout);
+			else if (pc->buf == 'a')
+				fwrite(ab.b + pc->start, sizeof(*(ab.b)), pc->len, stdout);
 		}
 	}
 	/* temp testing ends */
