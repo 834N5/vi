@@ -327,10 +327,3 @@ void vi_open(const char *f, struct buf *fb)
 		fb->b[fb->len] = '\0';
 	}
 }
-
-/* not functional yet */
-/* get pointer to first char of line n */
-/*
-char *vi_getline() {
-}
-*/

@@ -43,6 +43,5 @@ struct piece_table {
 void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece_table *pt);
 void pt_init(struct buf *fb, struct piece_table *pt);
 void vi_open(const char *f, struct buf *fb);
-//char *vi_getline(const struct buf *fb, size_t n);
 
 #endif
