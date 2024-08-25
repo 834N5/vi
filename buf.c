@@ -5,7 +5,7 @@
 #include "vi.h"
 
 /* add piece to piece table */
-void pt_add_piece(char buf, size_t start, size_t len, size_t lines, struct piece_table *pt)
+void pt_add_piece(size_t start, size_t len, size_t lines, struct piece_table *pt)
 {
 	struct piece *ptr;
 
@@ -15,7 +15,6 @@ void pt_add_piece(char buf, size_t start, size_t len, size_t lines, struct piece
 	pt->pcs = ptr;
 
 	ptr = pt->pcs + pt->num_pcs - 1;
-	ptr->buf = buf;
 	ptr->start = start;
 	ptr->len = len;
 	ptr->lines = lines;
@@ -50,7 +49,7 @@ void op_insert_piece(struct piece_table *pt, size_t pos)
 }
 
 /* insert text in a specified position in the piece table */
-void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece_table *pt)
+void pt_insert(char *b, size_t pos, struct buf *eb, struct piece_table *pt)
 {
 	int split = 0;
 	size_t len = strlen(b);
@@ -64,12 +63,12 @@ void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece
 	struct operation *op_ptr;
 	struct piece *pc_ptr;
 
-	ptr = realloc(ab->b, sizeof(ab->b) * (ab->len + len));
+	ptr = realloc(eb->b, sizeof(eb->b) * (eb->len + len));
 	if (ptr == NULL)
 		die("realloc failed");
-	ab->b = ptr;
-	memcpy(ab->b + ab->len, b, len);
-	ab->len += len;
+	eb->b = ptr;
+	memcpy(eb->b + eb->len, b, len);
+	eb->len += len;
 
 	char_ptr = b;
 	while ((char_ptr = strchr(char_ptr, '\n')) != NULL) {
@@ -142,33 +141,18 @@ void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece
 		op_ptr->len = (pt->ops + op_split)->len - pc_ptr->len;
 		op_ptr->lines = (pt->ops + op_split)->lines - pc_ptr->lines;
 
-		if (pc_ptr->buf == 'a') {
-			char_ptr = ab->b + pc_ptr->start;
-			for (size_t i = 0; i < pc_ptr->lines; ++i) {
-				char_ptr = strchr(char_ptr, '\n');
-				if (char_ptr < (ab->b + pc_ptr->start + pos)) {
-					++lines_tmp;
-					++char_ptr;
-				} else {
-					break;
-				}
-			}
-		}
-		if (pc_ptr->buf == 'f') {
-			char_ptr = fb->b + pc_ptr->start;
-			for (size_t i = 0; i < pc_ptr->lines; ++i) {
-				char_ptr = strchr(char_ptr, '\n');
-				if (char_ptr < (fb->b + pc_ptr->start + pos)) {
-					++lines_tmp;
-					++char_ptr;
-				} else {
-					break;
-				}
+		char_ptr = eb->b + pc_ptr->start;
+		for (size_t i = 0; i < pc_ptr->lines; ++i) {
+			char_ptr = strchr(char_ptr, '\n');
+			if (char_ptr < (eb->b + pc_ptr->start + pos)) {
+				++lines_tmp;
+				++char_ptr;
+			} else {
+				break;
 			}
 		}
 
 		pt_add_piece(
-			pc_ptr->buf,
 			pc_ptr->start + pos,
 			pc_ptr->len - pos,
 			pc_ptr->lines - lines_tmp,
@@ -177,11 +161,11 @@ void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece
 		op_insert_piece(pt, pc_split);
 		pc_ptr = pt->pcs + *((pt->ops + op_split)->pcs + pc_split);
 
-		pt_add_piece('a', ab->len - len, len, lines, pt);
+		pt_add_piece(eb->len - len, len, lines, pt);
 		op_insert_piece(pt, pc_split);
 		pc_ptr = pt->pcs + *((pt->ops + op_split)->pcs + pc_split);
 
-		pt_add_piece(pc_ptr->buf, pc_ptr->start, pos, lines_tmp, pt);
+		pt_add_piece(pc_ptr->start, pos, lines_tmp, pt);
 		op_insert_piece(pt, pc_split);
 
 		*(pt->table + table_split) = pt->num_ops - 1;
@@ -210,7 +194,7 @@ void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece
 		op_ptr->len = (pt->ops + op_split)->len;
 		op_ptr->lines = (pt->ops + op_split)->lines;
 
-		pt_add_piece('a', ab->len - len, len, lines, pt);
+		pt_add_piece(eb->len - len, len, lines, pt);
 		op_insert_piece(pt, pc_split);
 		*(pt->table + table_split) = pt->num_ops - 1;
 	}
@@ -223,7 +207,7 @@ void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece
 		op_ptr->num_del = 0;
 		op_ptr->len = 0;
 		op_ptr->lines = 0;
-		pt_add_piece('a', ab->len - len, len, lines, pt);
+		pt_add_piece(eb->len - len, len, lines, pt);
 		op_insert_piece(pt, 0);
 
 		ptr = realloc(pt->table, sizeof(*pt->table) * ++pt->num_table);
@@ -240,19 +224,16 @@ void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece
 
 	pt->len += len;
 	pt->lines += lines;
-
-	/* TODO: implement undo */
-	//pt->undo = 0;
 }
 
 /* initialise piece table */
-void pt_init(struct buf *fb, struct piece_table *pt)
+void pt_init(struct buf *eb, struct piece_table *pt)
 {
 	void *ptr;
 	char *char_ptr;
 	size_t lines = 0;
 
-	if (fb->b == NULL)
+	if (eb->b == NULL)
 		return;
 
 	if ((ptr = malloc(sizeof(*pt->table))) == NULL)
@@ -272,21 +253,21 @@ void pt_init(struct buf *fb, struct piece_table *pt)
 	pt->ops->len = 0;
 	pt->ops->lines = 0;
 
-	char_ptr = fb->b;
+	char_ptr = eb->b;
 	while ((char_ptr = strchr(char_ptr, '\n')) != NULL) {
 		++lines;
 		++char_ptr;
 	}
 
-	pt_add_piece('f', 0, fb->len, lines, pt);
+	pt_add_piece(0, eb->len, lines, pt);
 	op_insert_piece(pt, 0);
 
-	pt->len = fb->len;
+	pt->len = eb->len;
 	pt->lines = lines;
 }
 
 /* copy file to buffer and append line break if needed */
-void vi_open(const char *f, struct buf *fb)
+void vi_open(const char *f, struct buf *eb)
 {
 	FILE *fp;
 	char b[BUF_SIZE];
@@ -297,33 +278,33 @@ void vi_open(const char *f, struct buf *fb)
 	if (!fp)
 		die("Error opening file");
 	do {
-		if ((len = fread(b, sizeof(b[0]), BUF_SIZE, fp))) {
-			ptr = realloc(fb->b, sizeof(*fb->b) * (fb->len + len));
+		if ((len = fread(b, sizeof(*b), BUF_SIZE, fp))) {
+			ptr = realloc(eb->b, sizeof(*eb->b) * (eb->len + len));
 			if (ptr == NULL) {
 				fclose(fp);
 				die("realloc failed");
 			}
-			fb->b = ptr;
-			memcpy(fb->b + fb->len, b, len);
-			fb->len += len;
+			eb->b = ptr;
+			memcpy(eb->b + eb->len, b, len);
+			eb->len += len;
 		}
 	} while(len == BUF_SIZE);
 	fclose(fp);
-	if (fb->b != NULL) {
-		ptr = realloc(fb->b, sizeof(*fb->b) * (fb->len + 1));
+	if (eb->b != NULL) {
+		ptr = realloc(eb->b, sizeof(*eb->b) * (eb->len + 1));
 		if (ptr == NULL)
 			die("realloc failed");
-		fb->b = ptr;
-		fb->b[fb->len] = '\0';
+		eb->b = ptr;
+		eb->b[eb->len] = '\0';
 	}
 
 	/* Append line break unless file is empty */
-	if (fb->b != NULL && fb->b[fb->len - 1] != '\n') {
-		fb->b[fb->len++] = '\n';
-		ptr = realloc(fb->b, sizeof(*fb->b) * (fb->len + 1));
+	if (eb->b != NULL && eb->b[eb->len - 1] != '\n') {
+		eb->b[eb->len++] = '\n';
+		ptr = realloc(eb->b, sizeof(*eb->b) * (eb->len + 1));
 		if (ptr == NULL)
 			die("realloc failed");
-		fb->b = ptr;
-		fb->b[fb->len] = '\0';
+		eb->b = ptr;
+		eb->b[eb->len] = '\0';
 	}
 }

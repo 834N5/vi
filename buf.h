@@ -8,12 +8,7 @@ struct buf {
 	size_t len;
 };
 
-/*
- * buf: 'f' = file buffer
- *      'a' = append buffer
- */
 struct piece {
-	char buf;
 	size_t start;
 	size_t len;
 	size_t lines;
@@ -32,7 +27,6 @@ struct piece_table {
 	struct piece *pcs;
 	struct operation *ops;
 	size_t *table;
-	size_t undo;
 	size_t num_pcs;
 	size_t num_ops;
 	size_t num_table;
@@ -40,8 +34,8 @@ struct piece_table {
 	size_t lines;
 };
 
-void pt_insert(char *b, size_t pos, struct buf *fb, struct buf *ab, struct piece_table *pt);
-void pt_init(struct buf *fb, struct piece_table *pt);
-void vi_open(const char *f, struct buf *fb);
+void pt_insert(char *b, size_t pos, struct buf *eb, struct piece_table *pt);
+void pt_init(struct buf *eb, struct piece_table *pt);
+void vi_open(const char *f, struct buf *eb);
 
 #endif
