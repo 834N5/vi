@@ -1,5 +1,5 @@
 # vi
-POSIX vi clone
+not yet POSIX compliant vi clone
 
 ## Goals
 - Only POSIX and libc headers
