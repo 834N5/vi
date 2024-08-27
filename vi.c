@@ -5,6 +5,7 @@
 #include "term.h"
 
 struct buf edit_buf = {NULL, 0};
+struct buf display_buf = {NULL, 0};
 struct piece_table pt = {NULL};
 size_t cursor_pos = 0;
 int cursor_x = 1;
@@ -30,9 +31,11 @@ void die(const char *err)
 	exit(EXIT_FAILURE);
 }
 
-void draw_screen(size_t start, size_t lines)
+void update_display_buffer(size_t start, size_t lines)
 {
-	struct buf draw_buf = {NULL, 0};
+	free(display_buf.b);
+	display_buf.b = NULL;
+	display_buf.len = 0;
 	char *ptr;
 
 	if (lines == 0)
@@ -65,33 +68,22 @@ void draw_screen(size_t start, size_t lines)
 				if (len > cols)
 					len = cols + 1;
 				ptr = memchr(pos, '\n', sizeof(*pos) * len);
-				--len;
 				if (ptr != NULL)
 					len = ptr + 1 - pos;
+				else if (len > cols)
+					len = cols;
 
-				draw_buf.len += len;
-				if (pos[len - 1] == '\n') {
-					draw_buf.len += 3;
-				}
-				ptr = realloc(draw_buf.b,
-					sizeof(*draw_buf.b) * draw_buf.len
+				display_buf.len += len;
+				ptr = realloc(
+					display_buf.b,
+					sizeof(*display_buf.b) * display_buf.len
 				);
 				if (ptr == NULL)
 					die("realloc failed");
-				draw_buf.b = ptr;
+				display_buf.b = ptr;
 
-				ptr = draw_buf.b + draw_buf.len - len;
-				if (pos[len - 1] == '\n') {
-					ptr -= 3;
-				}
-
+				ptr = display_buf.b + display_buf.len - len;
 				memcpy(ptr, pos, sizeof(*ptr) * len);
-				if (pos[len - 1] == '\n') {
-					memcpy(
-						ptr + len - 1, "\x1b[K\n",
-						sizeof(*ptr) * 4
-					);
-				}
 
 				pos += len;
 				if (--lines == 0)
@@ -99,6 +91,49 @@ void draw_screen(size_t start, size_t lines)
 			}
 		}
 	}
+}
+
+void draw_display_buffer()
+{
+	size_t lines = rows;
+	struct buf draw_buf = {NULL, 0};
+	char *ptr;
+	char *pos;
+
+	if (lines != 1)
+		--lines;
+
+	pos = display_buf.b;
+	for (size_t len = 0, left = display_buf.len; left > 0 ; left -= len) {
+		ptr = memchr(pos, '\n', sizeof(*pos) * left);
+		if (ptr != NULL)
+			len = ptr + 1 - pos;
+		else
+			len = left;
+
+		draw_buf.len += len + 3;
+		ptr = realloc(draw_buf.b, sizeof(*draw_buf.b) * draw_buf.len);
+		if (ptr == NULL)
+			die("realloc failed");
+		draw_buf.b = ptr;
+
+		ptr = draw_buf.b + draw_buf.len - (len + 3);
+		if (pos[len - 1] == '\n') {
+			memcpy(ptr, pos, sizeof(*ptr) * (len - 1));
+			memcpy(ptr + len - 1, "\x1b[K\n", sizeof(*ptr) * 4);
+			size_t temp = lines;
+			lines -= (len - 1 + cols - 1) / cols;
+			if (len == 1)
+				--lines;
+		} else {
+			memcpy(ptr, pos, sizeof(*ptr) * len);
+			memcpy(ptr + len, "\x1b[K", sizeof(*ptr) * 3);
+			size_t temp = lines;
+			lines -= (len + cols - 1) / cols;
+		}
+		pos += len;
+	}
+
 	if (lines != 0) {
 		draw_buf.len += lines * 5 - 1;
 		ptr = realloc(draw_buf.b, sizeof(*draw_buf.b) * draw_buf.len);
@@ -219,7 +254,8 @@ int main(int argc, char *argv[])
 	term_getwinsize(&rows, &cols);
 
 	fwrite("\x1b[H", sizeof(char), 3, stdout);
-	draw_screen(0, rows - 1);
+	update_display_buffer(0, rows - 1);
+	draw_display_buffer();
 	for (;;) {
 		printf("\x1b[%d;%dH", cursor_y, cursor_x);
 		fflush(stdout);
@@ -230,15 +266,23 @@ int main(int argc, char *argv[])
 			break;
 		case 'i':
 			cursor_pos += input_mode();
-			draw_screen(testingshit, rows - 1);
+			fwrite("\x1b[H", sizeof(char), 3, stdout);
+			update_display_buffer(testingshit, rows - 1);
+			draw_display_buffer();
 			break;
 		case 'k':
-			if (testingshit != 0)
-				draw_screen(--testingshit, rows - 1);
+			if (testingshit != 0) {
+				fwrite("\x1b[H", sizeof(char), 3, stdout);
+				update_display_buffer(--testingshit, rows - 1);
+				draw_display_buffer();
+			}
 			break;
 		case 'j':
-			if (testingshit < pt.lines - rows + 1)
-				draw_screen(++testingshit, rows - 1);
+			if (testingshit < pt.lines - 1) {
+				fwrite("\x1b[H", sizeof(char), 3, stdout);
+				update_display_buffer(++testingshit, rows - 1);
+				draw_display_buffer();
+			}
 			break;
 		default:
 			break;
