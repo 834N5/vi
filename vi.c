@@ -105,33 +105,68 @@ void draw_display_buffer()
 
 	pos = display_buf.b;
 	for (size_t len = 0, left = display_buf.len; left > 0 ; left -= len) {
+		size_t draw_len;
+		size_t tabs = 0;
+		size_t tab_spaces = 0;
+
 		ptr = memchr(pos, '\n', sizeof(*pos) * left);
 		if (ptr != NULL)
 			len = ptr + 1 - pos;
 		else
 			len = left;
 
-		draw_buf.len += len + 3;
+		ptr = pos;
+		for (size_t left = len; left > 0; ++tabs) {
+			ptr = memchr(ptr, '\t', sizeof(*ptr) * left);
+			if (ptr != NULL) {
+				size_t prev_len = ptr - pos + tab_spaces - tabs;
+				tab_spaces += 8 - prev_len % 8;
+				left = len - (++ptr - pos);
+			} else {
+				break;
+			}
+		}
+		draw_len = len + tab_spaces - tabs;
+
+		draw_buf.len += draw_len + 3;
 		ptr = realloc(draw_buf.b, sizeof(*draw_buf.b) * draw_buf.len);
 		if (ptr == NULL)
 			die("realloc failed");
 		draw_buf.b = ptr;
 
-		ptr = draw_buf.b + draw_buf.len - (len + 3);
-		if (pos[len - 1] == '\n') {
-			memcpy(ptr, pos, sizeof(*ptr) * (len - 1));
-			memcpy(ptr + len - 1, "\x1b[K\n", sizeof(*ptr) * 4);
-			size_t temp = lines;
-			lines -= (len - 1 + cols - 1) / cols;
+		for (size_t len = 0, left = draw_len; left > 0; ) {
+			size_t cp_len = 0;
+			size_t spaces;
+			ptr = memchr(pos, '\t', sizeof(*ptr) * left);
+
+			if (ptr != NULL) {
+				cp_len = ptr - pos;
+				len += cp_len;
+				spaces = 8 - len % 8;
+				ptr = draw_buf.b + draw_buf.len - (left + 3);
+				memcpy(ptr, pos, sizeof(*ptr) * cp_len);
+				for (size_t i = 0; i < spaces; ++i)
+					*(ptr + cp_len + i) = ' ';
+				pos += cp_len + 1;
+				left -= cp_len + spaces;
+				len += spaces;
+			} else {
+				ptr = draw_buf.b + draw_buf.len - (left + 3);
+				memcpy(ptr, pos, sizeof(*ptr) * left);
+				pos += left;
+				left = 0;
+			}
+		}
+		ptr = draw_buf.b + draw_buf.len - 3;
+		if (*(ptr - 1) == '\n') {
+			memcpy(ptr - 1, "\x1b[K\n", sizeof(*ptr) * 4);
+			lines -= (draw_len - 1 + cols - 1) / cols;
 			if (len == 1)
 				--lines;
 		} else {
-			memcpy(ptr, pos, sizeof(*ptr) * len);
-			memcpy(ptr + len, "\x1b[K", sizeof(*ptr) * 3);
-			size_t temp = lines;
-			lines -= (len + cols - 1) / cols;
+			memcpy(ptr, "\x1b[K", sizeof(*ptr) * 3);
+			lines -= (draw_len + cols - 1) / cols;
 		}
-		pos += len;
 	}
 
 	if (lines != 0) {
