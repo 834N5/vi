@@ -194,7 +194,7 @@ void draw_display_buffer()
 			}
 		}
 		ptr = draw_buf.b + draw_buf.len - 3;
-		if (*(ptr - 1) == '\n') {
+		if (*(ptr - 1) == '\n' && (draw_len - 1) % cols != 0) {
 			memcpy(ptr - 1, "\x1b[K\n", sizeof(*ptr) * 4);
 			lines -= (draw_len - 1 + cols - 1) / cols;
 			if (len == 1)
@@ -203,6 +203,11 @@ void draw_display_buffer()
 			memcpy(ptr, "\x1b[K", sizeof(*ptr) * 3);
 			lines -= (draw_len + cols - 1) / cols;
 		} else {
+			draw_buf.len -= 3;
+			ptr = realloc(
+				draw_buf.b,
+				sizeof(*draw_buf.b) * draw_buf.len
+			);
 			lines -= (draw_len + cols - 1) / cols;
 		}
 	}
@@ -254,7 +259,7 @@ size_t input_mode()
 			if (c != '\t' && c != '\r' && c != '\n')
 				continue;
 		if (buf_pos == buf_len) {
-			ptr = realloc(buf, sizeof(*buf) * (++buf_len + 1));
+			ptr = realloc(buf, sizeof(*buf) * (++buf_len + 2));
 			if (ptr == NULL)
 				die("realloc failed");
 			buf = ptr;
@@ -306,7 +311,12 @@ size_t input_mode()
 	}
 
 	if (buf_len != 0) {
-		buf[buf_pos] = '\0';
+		if (cursor_pos == pt.len) {
+			buf[buf_pos] = '\n';
+			buf[buf_pos + 1] = '\0';
+		} else {
+			buf[buf_pos] = '\0';
+		}
 		pt_insert(buf, cursor_pos, &edit_buf, &pt);
 	}
 
