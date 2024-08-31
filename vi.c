@@ -33,10 +33,12 @@ void die(const char *err)
 
 void update_display_buffer(size_t start, size_t lines)
 {
+	char *ptr;
+	size_t display_len = 0;
+
 	free(display_buf.b);
 	display_buf.b = NULL;
 	display_buf.len = 0;
-	char *ptr;
 
 	if (lines == 0)
 		lines = 1;
@@ -49,46 +51,80 @@ void update_display_buffer(size_t start, size_t lines)
 		}
 		for (size_t j = 0; j < op->num_pcs && lines != 0; ++j) {
 			size_t len;
-			char *pos;
 			struct piece *pc = pt.pcs + *(op->pcs + j);
+			char *start_pos;
+			char *pos = edit_buf.b + pc->start;
+			char *end = edit_buf.b + pc->start + pc->len;
 
 			if (start > pc->lines) {
 				start -= pc->lines;
 				continue;
 			}
 
-			pos = edit_buf.b + pc->start;
 			while (start != 0) {
 				pos = memchr(pos, '\n', sizeof(*pos) * pc->len);
 				++pos;
 				--start;
 			}
-			while (pos < edit_buf.b + pc->start + pc->len) {
-				len = (edit_buf.b + pc->start + pc->len) - pos;
-				if (len > cols)
-					len = cols + 1;
-				ptr = memchr(pos, '\n', sizeof(*pos) * len);
-				if (ptr != NULL)
-					len = ptr + 1 - pos;
-				else if (len > cols)
-					len = cols;
+			start_pos = pos;
+			while (pos < end) {
+				char *ht_ptr, *lf_ptr;
+				size_t ht_spaces = 0;
+				size_t left = end - pos;
+				ht_ptr = memchr(pos, '\t', sizeof(*pos) * left);
+				lf_ptr = memchr(pos, '\n', sizeof(*pos) * left);
+				if (ht_ptr != NULL && lf_ptr == NULL) {
+					ptr = ht_ptr;
+				} else if (ht_ptr == NULL && lf_ptr != NULL) {
+					ptr = lf_ptr;
+				} else if (ht_ptr != NULL && lf_ptr != NULL) {
+					if (ht_ptr < lf_ptr)
+						ptr = ht_ptr;
+					else
+						ptr = lf_ptr;
+				} else {
+					ptr = end - 1;
+				}
 
-				display_buf.len += len;
-				ptr = realloc(
-					display_buf.b,
-					sizeof(*display_buf.b) * display_buf.len
-				);
-				if (ptr == NULL)
-					die("realloc failed");
-				display_buf.b = ptr;
+				display_len += ptr - pos + 1;
+				if (*ptr == '\t')
+					ht_spaces = 8 - display_len % 8;
+				display_len += ht_spaces;
+				if (*ptr == '\n')
+					--display_len;
 
-				ptr = display_buf.b + display_buf.len - len;
-				memcpy(ptr, pos, sizeof(*ptr) * len);
-
-				pos += len;
-				if (--lines == 0)
+				if (lines * cols <= display_len) {
+					size_t rm_len = 0;
+					size_t max_size = lines * cols;
+					if (*ptr == '\t' || *ptr == '\n')
+						--ptr;
+					display_len -= ht_spaces;
+					if (display_len > max_size)
+						rm_len = display_len - max_size;
+					display_len -= rm_len;
+					pos = ptr - rm_len + 1;
 					break;
+				} if (*ptr == '\n') {
+					lines -= (display_len + cols-1) / cols;
+					if (display_len == 0)
+						--lines;
+					display_len = 0;
+				}
+				pos = ptr + 1;
 			}
+			lines -= (display_len + cols-1) / cols;
+			display_len = 0;
+			len = pos - start_pos;
+			display_buf.len += len;
+			ptr = realloc(
+				display_buf.b,
+				sizeof(*display_buf.b) * display_buf.len
+			);
+			if (ptr == NULL)
+				die("realloc failed");
+			display_buf.b = ptr;
+			ptr = display_buf.b + display_buf.len - len;
+			memcpy(ptr, start_pos, sizeof(*ptr) * len);
 		}
 	}
 }
@@ -163,8 +199,10 @@ void draw_display_buffer()
 			lines -= (draw_len - 1 + cols - 1) / cols;
 			if (len == 1)
 				--lines;
-		} else {
+		} else if (draw_len % cols != 0) {
 			memcpy(ptr, "\x1b[K", sizeof(*ptr) * 3);
+			lines -= (draw_len + cols - 1) / cols;
+		} else {
 			lines -= (draw_len + cols - 1) / cols;
 		}
 	}
