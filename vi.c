@@ -4,10 +4,13 @@
 #include "buf.h"
 #include "term.h"
 
+#define CTRL(k) ((k) & 0x1f)
+
 struct buf edit_buf = {NULL, 0};
 struct buf display_buf = {NULL, 0};
 struct piece_table pt = {NULL};
 size_t cursor_pos = 0;
+size_t display_pos = 0;
 int cursor_x = 1;
 int cursor_y = 1;
 unsigned short rows = 24;
@@ -31,9 +34,10 @@ void die(const char *err)
 	exit(EXIT_FAILURE);
 }
 
-void update_display_buffer(size_t start, size_t lines)
+size_t update_display_buffer(size_t start, size_t lines)
 {
 	char *ptr;
+	size_t display_pos = 0;
 	size_t display_len = 0;
 
 	free(display_buf.b);
@@ -57,13 +61,15 @@ void update_display_buffer(size_t start, size_t lines)
 			char *end = edit_buf.b + pc->start + pc->len;
 
 			if (start > pc->lines) {
+				display_pos += pc->len;
 				start -= pc->lines;
 				continue;
 			}
 
 			while (start != 0) {
-				pos = memchr(pos, '\n', sizeof(*pos) * pc->len);
-				++pos;
+				ptr = memchr(pos, '\n', sizeof(*pos) * pc->len);
+				display_pos += ++ptr - pos;
+				pos = ptr;
 				--start;
 			}
 			start_pos = pos;
@@ -103,6 +109,7 @@ void update_display_buffer(size_t start, size_t lines)
 						rm_len = display_len - max_size;
 					display_len -= rm_len;
 					pos = ptr - rm_len + 1;
+					lines -= (display_len + cols-1) / cols;
 					break;
 				} if (*ptr == '\n') {
 					lines -= (display_len + cols-1) / cols;
@@ -112,7 +119,6 @@ void update_display_buffer(size_t start, size_t lines)
 				}
 				pos = ptr + 1;
 			}
-			lines -= (display_len + cols-1) / cols;
 			display_len = 0;
 			len = pos - start_pos;
 			display_buf.len += len;
@@ -127,6 +133,7 @@ void update_display_buffer(size_t start, size_t lines)
 			memcpy(ptr, start_pos, sizeof(*ptr) * len);
 		}
 	}
+	return display_pos;
 }
 
 void draw_display_buffer()
@@ -135,15 +142,16 @@ void draw_display_buffer()
 	struct buf draw_buf = {NULL, 0};
 	char *ptr;
 	char *pos;
+	size_t len = 0;
 
 	if (lines != 1)
 		--lines;
 
 	pos = display_buf.b;
-	for (size_t len = 0, left = display_buf.len; left > 0 ; left -= len) {
-		size_t draw_len;
+	for (size_t left = display_buf.len; left > 0 ; left -= len) {
 		size_t tabs = 0;
 		size_t tab_spaces = 0;
+		size_t draw_len;
 
 		ptr = memchr(pos, '\n', sizeof(*pos) * left);
 		if (ptr != NULL)
@@ -219,6 +227,8 @@ void draw_display_buffer()
 			draw_buf.b = ptr;
 			lines -= (draw_len + cols - 1) / cols;
 		}
+		if (lines == 0)
+			break;
 	}
 
 	if (lines != 0) {
@@ -243,94 +253,117 @@ size_t input_mode()
 	char *ptr = NULL;
 	char *buf = malloc(sizeof(char));
 	*buf = '\0';
-	size_t buf_pos = 0;
+	size_t buf_top_len = 0;
 	size_t buf_len = 0;
 
 	for (;;) {
+		printf("\x1b[%d;%dH", cursor_y, cursor_x);
+		fflush(stdout);
 		char c = process_keypress();
-		size_t curr_op = 0;
-		size_t curr_pc = 0;
-		struct operation *op = NULL;
-		struct piece *pc = NULL;
-		size_t pos = cursor_pos;
-		size_t temp = 0;
 
 		if (c == 0x1B)
 			break;
 		if (c == 0x08 || c == 0x7F) {
-			if (buf_pos != 0 && buf[buf_pos-1] != '\n') {
-				--buf_pos;
-				printf("\x1b[%d;%dH", cursor_y, cursor_x);
+			if (buf_len != 0 && buf[buf_len-1] != '\n') {
+				ptr = realloc(buf, sizeof(*buf) * (--buf_len + 2));
+				if (ptr == NULL)
+					die("realloc failed");
+				buf = ptr;
+				printf("\x1b[%d;%dH", cursor_y, --cursor_x);
 				fflush(stdout);
 			}
 		}
 		if ((c >= 0x0 && c <= 0x1F) || c == 0x7F)
 			if (c != '\t' && c != '\r' && c != '\n')
 				continue;
-		if (buf_pos == buf_len) {
-			ptr = realloc(buf, sizeof(*buf) * (++buf_len + 2));
-			if (ptr == NULL)
-				die("realloc failed");
-			buf = ptr;
-		}
-		buf[buf_pos++] = (c == '\r') ? '\n' : c;
-		if (buf[buf_pos - 1] == '\n')
-			buf_len = buf_pos;
 
-		/* TODO: change to something like this */
-		/*
-		draw_screen(0, rows - 1);
-		fwrite(buf, sizeof(*buf), buf_len, stdout);
-		draw_screen(0, rows - 1);
-		*/
+		ptr = realloc(buf, sizeof(*buf) * (++buf_len + 2));
+		if (ptr == NULL)
+			die("realloc failed");
+		buf = ptr;
 
-		fwrite("\x1b[2J" "\x1b[H", sizeof(char), 7, stdout);
-		while (curr_op < pt.num_table && temp == 0) {
-			op = pt.ops + *(pt.table + curr_op++);
-			curr_pc = 0;
-			while (curr_pc < op->num_pcs && temp == 0) {
-				pc = pt.pcs + *(op->pcs + curr_pc++);
-				ptr = edit_buf.b + pc->start;
-				if (pc->len >= pos && temp == 0) {
-					fwrite(ptr, sizeof(*ptr), pos, stdout);
-					temp = 1;
-				} else {
-					pos -= pc->len;
-					fwrite(ptr, sizeof(*ptr), pc->len, stdout);
-				}
-			}
+		buf[buf_len - 1] = (c == '\r') ? '\n' : c;
+		if (buf_len == buf_top_len + 1)
+			++buf_top_len;
+
+		if (buf[buf_len - 1] == '\n') {
+			printf("\x1b[%d;%dr", cursor_y + 1, rows - 1);
+			fwrite("\x1b[1T", sizeof(char), 4, stdout);
+			printf("\x1b[%d;%dr", 1, rows);
+			printf("\x1b[%d;%dH", ++cursor_y, cursor_x = 1);
+			buf_top_len = buf_len;
+		} else {
+			fwrite(buf + buf_len - 1, sizeof(*buf), 1, stdout);
+			printf("\x1b[%d;%dH", cursor_y, ++cursor_x);
 		}
-		fwrite(buf, sizeof(*buf), buf_len, stdout);
-		if (op != NULL) {
-			fwrite(ptr + pos, sizeof(*ptr), pc->len - pos, stdout);
-			--curr_op;
-			while (curr_op < pt.num_table) {
-				op = pt.ops + *(pt.table + curr_op++);
-				while (curr_pc < op->num_pcs) {
-					pc = pt.pcs + *(op->pcs + curr_pc++);
-					ptr = edit_buf.b + pc->start;
-					fwrite(ptr, sizeof(*ptr), pc->len, stdout);
-				}
-				curr_pc = 0;
-			}
-		}
-		printf("\x1b[%d;%dH", cursor_y, cursor_x);
 		fflush(stdout);
-		temp = 0;
+		//beans jump
 	}
 
 	if (buf_len != 0) {
 		if (cursor_pos == pt.len) {
-			buf[buf_pos] = '\n';
-			buf[buf_pos + 1] = '\0';
+			buf[buf_len] = '\n';
+			buf[buf_len + 1] = '\0';
 		} else {
-			buf[buf_pos] = '\0';
+			buf[buf_len] = '\0';
 		}
 		pt_insert(buf, cursor_pos, &edit_buf, &pt);
 	}
 
 	free(buf);
-	return buf_pos;
+	return buf_len;
+}
+
+void ex_commands(char *file)
+{
+	char c;
+	char *ptr;
+	char *buf = malloc(sizeof(char));
+	size_t buf_len = 0;
+
+	printf("\x1b[%d;%luH:\x1b[K", rows, buf_len + 1);
+	fflush(stdout);
+	for (;;) {
+		printf("\x1b[%d;%luH", rows, buf_len + 2);
+		fflush(stdout);
+		c = process_keypress();
+		if (c == 0x1B)
+			break;
+		if (buf_len != 0 && (c == 0x08 || c == 0x7F)) {
+			if (buf_len != 1) {
+				ptr = realloc(buf, sizeof(*buf) * --buf_len);
+				if (ptr == NULL)
+					die("realloc failed");
+				buf = ptr;
+			} else {
+				--buf_len;
+			}
+		}
+		if ((c >= 0x0 && c <= 0x1F) || c == 0x7F)
+			if (c != '\t' && c != '\r' && c != '\n')
+				continue;
+
+		if (c == '\r' || c == '\n')
+			break;
+
+		ptr = realloc(buf, sizeof(*buf) * ++buf_len);
+		if (ptr == NULL)
+			die("realloc failed");
+		buf = ptr;
+		buf[buf_len - 1] = c;
+		putchar(c);
+		fflush(stdout);
+	}
+	if (buf_len == 2 && buf[0] == 'w' && buf[1] == 'q') {
+		vi_save(file, &pt, &edit_buf);
+		exit(EXIT_SUCCESS);
+	} if (buf_len == 1 && buf[0] == 'w') {
+		vi_save(file, &pt, &edit_buf);
+		printf("\x1b[%d;1H\"%s\" has been saved", rows, file);
+	} if (buf_len == 1 && buf[0] == 'q') {
+		exit(EXIT_SUCCESS);
+	}
+	free(buf);
 }
 
 int main(int argc, char *argv[])
@@ -346,35 +379,37 @@ int main(int argc, char *argv[])
 	term_getwinsize(&rows, &cols);
 
 	fwrite("\x1b[H", sizeof(char), 3, stdout);
-	update_display_buffer(0, rows - 1);
+	display_pos = update_display_buffer(0, rows - 1);
 	draw_display_buffer();
+	//beans
 	for (;;) {
+		//cursor_pos = display_pos;
 		printf("\x1b[%d;%dH", cursor_y, cursor_x);
+		//fwrite("\x1b[H", sizeof(char), 3, stdout);
 		fflush(stdout);
 		c = process_keypress();
 		switch (c) {
-		case 'q':
-			exit(EXIT_SUCCESS);
+		case ':':
+			ex_commands(argv[1]);
 			break;
 		case 'i':
 			cursor_pos += input_mode();
 			fwrite("\x1b[H", sizeof(char), 3, stdout);
-			update_display_buffer(testingshit, rows - 1);
+			display_pos = update_display_buffer(testingshit, rows - 1);
 			draw_display_buffer();
 			break;
-		case 'k':
-			if (testingshit != 0) {
-				fwrite("\x1b[H", sizeof(char), 3, stdout);
-				update_display_buffer(--testingshit, rows - 1);
-				draw_display_buffer();
-			}
+		case CTRL('Y'):
+			if (testingshit == 0)
+				break;
+			fwrite("\x1b[H", sizeof(char), 3, stdout);
+			display_pos = update_display_buffer(--testingshit, rows - 1);
+			draw_display_buffer();
 			break;
-		case 'j':
-			if (testingshit < pt.lines - 1) {
-				fwrite("\x1b[H", sizeof(char), 3, stdout);
-				update_display_buffer(++testingshit, rows - 1);
-				draw_display_buffer();
-			}
+		case CTRL('E'):
+			if (testingshit >= pt.lines - 1)
+				break;
+			display_pos = update_display_buffer(++testingshit, rows - 1);
+			draw_display_buffer();
 			break;
 		default:
 			break;

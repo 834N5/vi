@@ -37,5 +37,6 @@ struct piece_table {
 void pt_insert(char *b, size_t pos, struct buf *eb, struct piece_table *pt);
 void pt_init(struct buf *eb, struct piece_table *pt);
 void vi_open(const char *f, struct buf *eb);
+void vi_save(const char *f, struct piece_table *pt, struct buf *eb);
 
 #endif

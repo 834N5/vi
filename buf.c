@@ -308,3 +308,17 @@ void vi_open(const char *f, struct buf *eb)
 		eb->b[eb->len] = '\0';
 	}
 }
+
+void vi_save(const char *f, struct piece_table *pt, struct buf *eb)
+{
+	FILE *fp;
+	fp = fopen(f, "w");
+	for (size_t i = 0; i < pt->num_table; ++i) {
+		struct operation *op = pt->ops + *(pt->table + i);
+		for (size_t j = 0; j < op->num_pcs; ++j) {
+			struct piece *pc = pt->pcs + *(op->pcs + j);
+			fwrite(eb->b + pc->start, sizeof(*eb->b), pc->len, fp);
+		}
+	}
+	fclose(fp);
+}
