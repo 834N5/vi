@@ -297,7 +297,6 @@ size_t input_mode()
 			printf("\x1b[%d;%dH", cursor_y, ++cursor_x);
 		}
 		fflush(stdout);
-		//beans jump
 	}
 
 	if (buf_len != 0) {
@@ -381,7 +380,6 @@ int main(int argc, char *argv[])
 	fwrite("\x1b[H", sizeof(char), 3, stdout);
 	display_pos = update_display_buffer(0, rows - 1);
 	draw_display_buffer();
-	//beans
 	for (;;) {
 		//cursor_pos = display_pos;
 		printf("\x1b[%d;%dH", cursor_y, cursor_x);
